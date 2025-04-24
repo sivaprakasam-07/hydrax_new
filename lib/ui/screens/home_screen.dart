@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import 'package:permission_handler/permission_handler.dart'; // <== ADDED
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:get/get.dart';
+import '../../services/bluetooth_controller.dart';
 
 import '../widgets/battery_status.dart';
 import '../widgets/hydration_chart.dart';
@@ -33,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _waveController;
   int _selectedIndex = 0;
   bool _environmentalAdaptationEnabled = false;
+  final BluetoothController bluetoothController = Get.put(BluetoothController());
+  BluetoothDevice? connectedDevice;
 
   @override
   void initState() {
@@ -122,6 +126,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _currentTemperature = adaptedTemp;
             });
             print("✅ Adapted Temp: ${_currentTemperature.round()}°C");
+
+            // Send weather data and adapted temperature to ESP32
+            if (connectedDevice != null) {
+              final List<BluetoothService> services = await connectedDevice!.discoverServices();
+              for (var service in services) {
+                for (var characteristic in service.characteristics) {
+                  if (characteristic.properties.write) {
+                    // Prepare data to send
+                    final weatherData = "Weather Data:${weather.temperature}°C,Adapted:${_currentTemperature.round()}°C";
+                    final weatherBytes = weatherData.codeUnits;
+
+                    // Send data to ESP32
+                    await characteristic.write(weatherBytes, withoutResponse: true);
+                    print("✅ Weather data sent to ESP32: $weatherData");
+                    return;
+                  }
+                }
+              }
+              print("❌ No writable characteristic found on ESP32.");
+            } else {
+              print("❌ No connected device to send weather data.");
+            }
           }
         }
       } catch (e) {
@@ -154,48 +180,64 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _fixTemperature() async {
     try {
+      // Log temperature to Firebase
       await FirebaseService().logTemperature(_currentTemperature.round().toDouble());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('✅ Temperature logged successfully!')),
       );
+
+      // Send temperature to ESP32
+      if (connectedDevice != null) {
+        final List<BluetoothService> services = await connectedDevice!.discoverServices();
+        for (var service in services) {
+          for (var characteristic in service.characteristics) {
+            if (characteristic.properties.write) {
+              // Convert temperature to bytes and send
+              final tempBytes = _currentTemperature.round().toString().codeUnits;
+              await characteristic.write(tempBytes, withoutResponse: true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('✅ Temperature sent to ESP32!')),
+              );
+              return;
+            }
+          }
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ No writable characteristic found on ESP32.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ No connected device to send temperature.')),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Failed to log temperature!')),
+        SnackBar(content: Text('❌ Failed to send temperature: $e')),
       );
-    }
-  }
-
-  Future<void> _requestBluetoothPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
-
-    if (statuses.values.any((status) => !status.isGranted)) {
-      print("❌ Required permissions not granted");
     }
   }
 
   Future<void> _connectToBluetoothDevice() async {
-    await _requestBluetoothPermissions(); // ✅ NEW: Request permissions
+    bluetoothController.startDiscovery();
+    final selectedDevice = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => DeviceScreen()),
+    );
 
-    BluetoothDevice? selectedDevice = await FlutterBluetoothSerial.instance
-        .getBondedDevices()
-        .then((devices) => devices.isNotEmpty ? devices.first : null);
-
-    if (selectedDevice != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DeviceScreen(device: selectedDevice),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ No paired Bluetooth device found.')),
-      );
+    if (selectedDevice != null && selectedDevice is BluetoothDevice) {
+      try {
+        await selectedDevice.connect();
+        setState(() {
+          connectedDevice = selectedDevice;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ Connected to ${selectedDevice.name}')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Failed to connect to ${selectedDevice.name}')),
+        );
+      }
     }
   }
 

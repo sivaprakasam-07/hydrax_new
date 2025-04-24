@@ -42,7 +42,6 @@ dependencies:
   firebase_storage: ^12.4.4
   geolocator: ^10.1.0
   geocoding: ^2.1.0
-  flutter_bluetooth_serial: ^0.4.0
   get: ^4.6.6
   permission_handler: ^11.3.0
 

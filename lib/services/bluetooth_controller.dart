@@ -1,34 +1,41 @@
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:get/get.dart';
 
 class BluetoothController extends GetxController {
-  var devices = <BluetoothDevice>[].obs;
-  var isDiscovering = false.obs;
+  var devices = <BluetoothDevice>[].obs; // List of discovered devices
+  var isDiscovering = false.obs; // Discovery state
 
-  // Start discovery of Bluetooth devices
   void startDiscovery() async {
     try {
       isDiscovering.value = true;
+      devices.clear(); // Clear the list before starting a new scan
 
-      // Get already paired devices
-      List<BluetoothDevice> bondedDevices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      // Start scanning for devices
+      FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
 
-      // Optionally filter for specific devices, e.g., ESP32
-      devices.value = bondedDevices.where((device) => device.name?.contains("ESP32") ?? false).toList();
+      // Listen to scan results and update the devices list
+      FlutterBluePlus.scanResults.listen((results) {
+        devices.value = results.map((result) => result.device).toList();
+      });
 
-      // Once discovery finishes
-      isDiscovering.value = false;
+      // Stop discovery after the timeout
+      FlutterBluePlus.isScanning.listen((scanning) {
+        if (!scanning) {
+          isDiscovering.value = false;
+        }
+      });
     } catch (e) {
       print("Error during discovery: $e");
       isDiscovering.value = false;
-      // Handle any error during discovery (e.g., show a dialog to the user)
     }
   }
 
-  @override
-  void onInit() {
-    super.onInit();
-    // Avoid automatic discovery on init if not needed.
-    // You can trigger discovery manually in your UI.
+  void stopDiscovery() {
+    try {
+      FlutterBluePlus.stopScan(); // Stop scanning
+      isDiscovering.value = false;
+    } catch (e) {
+      print("Error stopping discovery: $e");
+    }
   }
 }
