@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _waveController;
   int _selectedIndex = 0;
   bool _environmentalAdaptationEnabled = false;
+  bool _userAdoptionEnabled = false;
   final BluetoothController bluetoothController = Get.put(BluetoothController());
   BluetoothDevice? connectedDevice;
 
@@ -152,6 +153,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       } catch (e) {
         print('⚠️ Error updating temperature: $e');
+      }
+    }
+  }
+
+  Future<void> _toggleUserAdoption(bool value) async {
+    setState(() {
+      _userAdoptionEnabled = value;
+    });
+
+    if (value) {
+      // Reduce temperature by 5
+      setState(() {
+        _currentTemperature = (_currentTemperature - 5).clamp(10.0, 50.0);
+      });
+
+      // Send the updated temperature to ESP32
+      if (connectedDevice != null) {
+        try {
+          final List<BluetoothService> services = await connectedDevice!.discoverServices();
+          for (var service in services) {
+            for (var characteristic in service.characteristics) {
+              if (characteristic.properties.write) {
+                // Convert temperature to bytes and send
+                final tempBytes = _currentTemperature.round().toString().codeUnits;
+                await characteristic.write(tempBytes, withoutResponse: true);
+                print("✅ User Adoption Temp sent to ESP32: ${_currentTemperature.round()}°C");
+                return;
+              }
+            }
+          }
+          print("❌ No writable characteristic found on ESP32.");
+        } catch (e) {
+          print("⚠️ Failed to send User Adoption Temp: $e");
+        }
+      } else {
+        print("❌ No connected device to send User Adoption Temp.");
       }
     }
   }
@@ -351,6 +388,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             value: _environmentalAdaptationEnabled,
             onChanged: (value) {
               _toggleEnvironmentalAdaptation(value);
+            },
+          ),
+          SizedBox(height: 20),
+          SwitchListTile(
+            title: Text("User Adoption"),
+            value: _userAdoptionEnabled,
+            onChanged: (value) {
+              _toggleUserAdoption(value);
             },
           ),
           SizedBox(height: 20),
