@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ✅ Import FirebaseAuth
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'ui/screens/home_screen.dart';
@@ -14,6 +15,11 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('✅ Firebase initialized successfully!');
+
+    // ✅ Sign in anonymously if no user is signed in
+    if (FirebaseAuth.instance.currentUser == null) {
+      await FirebaseAuth.instance.signInAnonymously();
+    }
   } catch (e) {
     debugPrint('❌ Firebase initialization failed: $e');
   }

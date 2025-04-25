@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // ✅ Import debugPrint
 
@@ -9,9 +8,10 @@ class FirebaseService {
   // ✅ Add Temperature Log to Firestore
   Future<void> logTemperature(double temperature) async {
     try {
+      debugPrint("Attempting to log temperature: $temperature");
       await _firestore.collection('temperatureLogs').add({
         'temperature': temperature,
-        'timestamp': FieldValue.serverTimestamp(), // Automatically add server time
+        'timestamp': FieldValue.serverTimestamp(),
       });
       print("✅ Temperature log added successfully!");
     } catch (e) {
