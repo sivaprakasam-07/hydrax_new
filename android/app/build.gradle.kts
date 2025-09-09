@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.hydrax_new"
-        minSdk = 23 // ✅ bumped to meet Firebase & plugins' minimum requirement
+        minSdk = flutter.minSdkVersion // ✅ bumped to meet Firebase & plugins' minimum requirement
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
