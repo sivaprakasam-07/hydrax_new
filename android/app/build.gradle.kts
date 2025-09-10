@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.hydrax_new"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -22,7 +22,7 @@ android {
     defaultConfig {
         applicationId = "com.example.hydrax_new"
         minSdk = flutter.minSdkVersion // ✅ bumped to meet Firebase & plugins' minimum requirement
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }

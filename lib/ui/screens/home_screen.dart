@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:get/get.dart';
 import '../../services/bluetooth_controller.dart';
@@ -18,6 +17,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/location_service.dart';
 import '../../services/weather_service.dart';
+import '../../services/ai_service.dart';
 import '../../models/weather_model.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   bool _environmentalAdaptationEnabled = false;
   bool _userAdoptionEnabled = false;
+  bool _smartTemperatureEnabled = false;
   final BluetoothController bluetoothController = Get.put(BluetoothController());
   BluetoothDevice? connectedDevice;
 
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     )..repeat(reverse: true);
 
     _loadEnvironmentalAdaptationPreference();
+    _loadSmartTemperaturePreference();
     _checkAndUpdateTemperature();
     _getCurrentLocation();
   }
@@ -191,6 +193,105 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         print("❌ No connected device to send User Adoption Temp.");
       }
     }
+  }
+
+  // 🤖 Smart Temperature Control using Linear Regression
+  Future<void> _toggleSmartTemperature(bool value) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("smartTemperatureEnabled", value);
+    
+    setState(() {
+      _smartTemperatureEnabled = value;
+    });
+
+    if (value) {
+      await _applySmartTemperatureControl();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('🔄 Smart Temperature Control disabled')),
+      );
+    }
+  }
+
+  // Apply AI-powered temperature prediction
+  Future<void> _applySmartTemperatureControl() async {
+    try {
+      // Get current location for ambient temperature
+      var position = await LocationService().getCurrentLocation();
+      double ambientTemp = 25.0; // Default fallback
+      
+      if (position != null) {
+        WeatherModel? weather = await WeatherService().getWeather(position.latitude, position.longitude);
+        if (weather != null) {
+          ambientTemp = weather.temperature;
+        }
+      }
+
+      // Get AI recommendation using Linear Regression model
+      final recommendation = await AIService().getSmartTemperatureRecommendation(
+        currentTemp: _currentTemperature,
+        ambientTemp: ambientTemp,
+        userPreference: _currentTemperature, // Use current as preference
+      );
+
+      double averageTemp = recommendation['averageUserTemperature'];
+      String reason = recommendation['reason'];
+      double confidence = recommendation['confidence'];
+
+      // Update temperature to the average from 75 users (as per requirement)
+      setState(() {
+        _currentTemperature = averageTemp;
+      });
+
+      // Send to ESP32
+      if (connectedDevice != null) {
+        try {
+          final List<BluetoothService> services = await connectedDevice!.discoverServices();
+          for (var service in services) {
+            for (var characteristic in service.characteristics) {
+              if (characteristic.properties.write) {
+                final tempBytes = averageTemp.round().toString().codeUnits;
+                await characteristic.write(tempBytes, withoutResponse: true);
+                print("✅ Smart Temperature sent to ESP32: ${averageTemp.round()}°C");
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          print("⚠️ Failed to send Smart Temperature: $e");
+        }
+      }
+
+      // Show detailed feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('🤖 Smart Temperature Applied: ${averageTemp.round()}°C'),
+              Text('📊 Based on 75 users\' preferences'),
+              Text('🎯 Confidence: ${(confidence * 100).round()}%'),
+              Text('💡 $reason'),
+            ],
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Smart Temperature Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _loadSmartTemperaturePreference() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    bool savedValue = prefs.getBool("smartTemperatureEnabled") ?? false;
+    setState(() {
+      _smartTemperatureEnabled = savedValue;
+    });
   }
 
   void _onNavBarTapped(int index) {
@@ -396,6 +497,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             value: _userAdoptionEnabled,
             onChanged: (value) {
               _toggleUserAdoption(value);
+            },
+          ),
+          SizedBox(height: 20),
+          SwitchListTile(
+            title: Text("🤖 Smart Temperature Control"),
+            subtitle: Text("AI-powered temperature using 75 users' data"),
+            value: _smartTemperatureEnabled,
+            onChanged: (value) {
+              _toggleSmartTemperature(value);
             },
           ),
           SizedBox(height: 20),
