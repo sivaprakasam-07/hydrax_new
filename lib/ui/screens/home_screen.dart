@@ -439,7 +439,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildHomeScreen() {
     bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return Center(
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(vertical: 20),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -483,37 +484,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onPressed: _fixTemperature,
             child: Text('Fix Temperature'),
           ),
-          SizedBox(height: 20),
-          SwitchListTile(
-            title: Text("Environmental Adaptation"),
-            value: _environmentalAdaptationEnabled,
-            onChanged: (value) {
-              _toggleEnvironmentalAdaptation(value);
-            },
+          SizedBox(height: 15),
+          // Control Switches Section
+          Card(
+            elevation: 2,
+            margin: EdgeInsets.symmetric(horizontal: 16),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: Text("Environmental Adaptation", style: TextStyle(fontSize: 14)),
+                    dense: true,
+                    value: _environmentalAdaptationEnabled,
+                    onChanged: (value) {
+                      _toggleEnvironmentalAdaptation(value);
+                    },
+                  ),
+                  Divider(height: 1),
+                  SwitchListTile(
+                    title: Text("User Adoption", style: TextStyle(fontSize: 14)),
+                    dense: true,
+                    value: _userAdoptionEnabled,
+                    onChanged: (value) {
+                      _toggleUserAdoption(value);
+                    },
+                  ),
+                  Divider(height: 1),
+                  SwitchListTile(
+                    title: Text("🤖 Smart Temperature Control", style: TextStyle(fontSize: 14)),
+                    subtitle: Text("AI-powered using 75 users' data", style: TextStyle(fontSize: 12)),
+                    dense: true,
+                    value: _smartTemperatureEnabled,
+                    onChanged: (value) {
+                      _toggleSmartTemperature(value);
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-          SizedBox(height: 20),
-          SwitchListTile(
-            title: Text("User Adoption"),
-            value: _userAdoptionEnabled,
-            onChanged: (value) {
-              _toggleUserAdoption(value);
-            },
-          ),
-          SizedBox(height: 20),
-          SwitchListTile(
-            title: Text("🤖 Smart Temperature Control"),
-            subtitle: Text("AI-powered temperature using 75 users' data"),
-            value: _smartTemperatureEnabled,
-            onChanged: (value) {
-              _toggleSmartTemperature(value);
-            },
-          ),
-          SizedBox(height: 20),
+          SizedBox(height: 15),
           ElevatedButton.icon(
             onPressed: _connectToBluetoothDevice,
             icon: Icon(Icons.bluetooth),
             label: Text("Connect Device"),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
           ),
+          SizedBox(height: 10),
         ],
       ),
     );
